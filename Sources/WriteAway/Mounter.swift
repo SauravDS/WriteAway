@@ -6,6 +6,7 @@ enum MounterError: LocalizedError {
     case ntfs3gNotFound
     case unmountFailed(String)
     case mountFailed(String)
+    case ejectFailed(String)
     case userCancelled
 
     var errorDescription: String? {
@@ -16,6 +17,8 @@ enum MounterError: LocalizedError {
             return "Could not unmount the volume: \(msg)"
         case .mountFailed(let msg):
             return "ntfs-3g mount failed: \(msg)"
+        case .ejectFailed(let msg):
+            return "Could not eject the volume: \(msg)"
         case .userCancelled:
             return "Authentication was cancelled."
         }
@@ -91,6 +94,24 @@ final class Mounter {
             // FUSE mounts made by root sometimes need privileged unmount.
             let escapedDevice = Shell.shellEscape(volume.devicePath)
             try runPrivileged("/usr/sbin/diskutil unmount force \(escapedDevice)")
+        }
+    }
+    
+    /// Ejects a volume (unmounts all volumes on the physical disk and spins it down).
+    func eject(_ volume: NTFSVolume) throws {
+        // Find the whole disk device (e.g., "disk4s1" -> "disk4")
+        let wholeDisk = volume.deviceID.prefix(while: { $0.isLetter || $0.isNumber && $0 != "s" })
+        guard !wholeDisk.isEmpty else { throw MounterError.ejectFailed("Invalid device ID: \(volume.deviceID)") }
+        let wholeDiskPath = "/dev/\(wholeDisk)"
+        
+        let result = Shell.run("/usr/sbin/diskutil", ["eject", wholeDiskPath])
+        if !result.succeeded {
+            // FUSE mounts might block eject, try privileged unmount first
+            try? unmount(volume)
+            let secondTry = Shell.run("/usr/sbin/diskutil", ["eject", wholeDiskPath])
+            if !secondTry.succeeded {
+                throw MounterError.ejectFailed(secondTry.stderr.isEmpty ? "unknown error" : secondTry.stderr)
+            }
         }
     }
 

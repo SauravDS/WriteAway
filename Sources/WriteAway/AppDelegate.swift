@@ -124,6 +124,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 unmountItem.target = self
                 unmountItem.representedObject = volume.deviceID
                 menu.addItem(unmountItem)
+                
+                let ejectItem = NSMenuItem(title: "   Eject",
+                                           action: #selector(ejectVolume(_:)),
+                                           keyEquivalent: "")
+                ejectItem.target = self
+                ejectItem.representedObject = volume.deviceID
+                menu.addItem(ejectItem)
             }
 
             menu.addItem(.separator())
@@ -190,6 +197,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } catch {
                 DispatchQueue.main.async {
                     self.log.error("Unmount failed for \(volume.volumeName): \(error.localizedDescription)")
+                    self.refresh()
+                    self.showError(error)
+                }
+            }
+        }
+    }
+    
+    @objc private func ejectVolume(_ sender: NSMenuItem) {
+        guard let volume = volume(for: sender) else { return }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            do {
+                try self.mounter.eject(volume)
+                DispatchQueue.main.async {
+                    self.log.info("Ejected \(volume.volumeName)")
+                    self.refresh()
+                    self.notify(title: "Ejected",
+                                text: "\(volume.volumeName) can be unplugged safely.")
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.log.error("Eject failed for \(volume.volumeName): \(error.localizedDescription)")
                     self.refresh()
                     self.showError(error)
                 }
