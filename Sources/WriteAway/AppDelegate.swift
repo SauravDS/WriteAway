@@ -143,6 +143,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(refreshItem)
 
         menu.addItem(.separator())
+        let updateItem = NSMenuItem(title: "Check for Updates...",
+                                    action: #selector(checkForUpdates),
+                                    keyEquivalent: "")
+        updateItem.target = self
+        menu.addItem(updateItem)
+
+        menu.addItem(.separator())
         let quitItem = NSMenuItem(title: "Quit WriteAway",
                                   action: #selector(NSApplication.terminate(_:)),
                                   keyEquivalent: "q")
@@ -152,6 +159,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Actions
 
     @objc private func manualRefresh() { refresh() }
+
+    @objc private func checkForUpdates() {
+        if let url = URL(string: "https://github.com/SauravDS/WriteAway/releases") {
+            NSWorkspace.shared.open(url)
+        }
+    }
 
     @objc private func openInFinder(_ sender: NSMenuItem) {
         guard let volume = volume(for: sender), let path = volume.mountPoint else { return }
