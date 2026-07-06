@@ -1,4 +1,5 @@
 import AppKit
+import os
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
@@ -7,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let mounter = Mounter()
     private var volumes: [NTFSVolume] = []
     private var refreshTimer: Timer?
+    private let log = Logger(subsystem: "com.writeaway.app", category: "AppDelegate")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -42,8 +44,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             let found = self.monitor.scan()
             DispatchQueue.main.async {
+                let changed = found != self.volumes
                 self.volumes = found
                 self.updateIcon()
+                if changed {
+                    self.log.info("Detected \(found.count) NTFS volume(s): \(found.map { $0.volumeName }.joined(separator: ", "))")
+                }
             }
         }
     }
@@ -152,6 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             do {
                 try self.mounter.mountReadWrite(volume)
                 DispatchQueue.main.async {
+                    self.log.info("Mounted \(volume.volumeName) read/write")
                     self.refresh()
                     self.notify(title: "Mounted read/write",
                                 text: "\(volume.volumeName) is now writable.")
@@ -160,6 +167,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 DispatchQueue.main.async { self.refresh() }
             } catch {
                 DispatchQueue.main.async {
+                    self.log.error("Mount failed for \(volume.volumeName): \(error.localizedDescription)")
                     self.refresh()
                     self.showError(error)
                 }
@@ -174,12 +182,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             do {
                 try self.mounter.unmount(volume)
                 DispatchQueue.main.async {
+                    self.log.info("Unmounted \(volume.volumeName)")
                     self.refresh()
                     self.notify(title: "Unmounted",
                                 text: "\(volume.volumeName) can be unplugged safely.")
                 }
             } catch {
                 DispatchQueue.main.async {
+                    self.log.error("Unmount failed for \(volume.volumeName): \(error.localizedDescription)")
                     self.refresh()
                     self.showError(error)
                 }

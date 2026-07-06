@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import os
 
 enum MounterError: LocalizedError {
     case ntfs3gNotFound
@@ -24,6 +25,8 @@ enum MounterError: LocalizedError {
 /// Handles remounting NTFS volumes read/write through ntfs-3g,
 /// and unmounting/ejecting them.
 final class Mounter {
+
+    private let log = Logger(subsystem: "com.writeaway.app", category: "Mounter")
 
     /// Candidate install locations for ntfs-3g
     /// (Apple Silicon Homebrew, Intel Homebrew, MacPorts).
@@ -76,6 +79,7 @@ final class Mounter {
         let script = "/bin/mkdir -p \(escapedMountPoint) && "
             + "\(escapedNtfs3g) \(escapedDevice) \(escapedMountPoint) -o \(options)"
 
+        log.info("Mounting \(volume.volumeName) (\(volume.devicePath)) read/write")
         try runPrivileged(script)
     }
 
