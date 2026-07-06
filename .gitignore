@@ -4,3 +4,4 @@ push-to-github.sh
 *.xcodeproj
 .swiftpm/
 WriteAway.app/
+.test_runner
