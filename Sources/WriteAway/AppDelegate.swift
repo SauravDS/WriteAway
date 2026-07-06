@@ -212,14 +212,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.runModal()
     }
 
+    /// Shows a non-blocking toast-style notification that auto-dismisses.
+    /// Does not block the main thread or the run loop.
     private func notify(title: String, text: String) {
-        // Lightweight in-app confirmation; avoids the notification-permission
-        // dance that UNUserNotificationCenter requires for unsigned apps.
-        let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = text
-        alert.alertStyle = .informational
-        alert.runModal()
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 300, height: 70),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered, defer: true
+        )
+        panel.isFloatingPanel = true
+        panel.level = .floating
+        panel.backgroundColor = NSColor.windowBackgroundColor
+        panel.hasShadow = true
+        panel.isOpaque = false
+        panel.alphaValue = 0.0
+
+        // Rounded corners
+        panel.contentView?.wantsLayer = true
+        panel.contentView?.layer?.cornerRadius = 10
+
+        let titleLabel = NSTextField(labelWithString: title)
+        titleLabel.font = .boldSystemFont(ofSize: 13)
+        titleLabel.frame = NSRect(x: 16, y: 36, width: 268, height: 20)
+
+        let bodyLabel = NSTextField(labelWithString: text)
+        bodyLabel.font = .systemFont(ofSize: 11)
+        bodyLabel.textColor = .secondaryLabelColor
+        bodyLabel.frame = NSRect(x: 16, y: 14, width: 268, height: 18)
+
+        panel.contentView?.addSubview(titleLabel)
+        panel.contentView?.addSubview(bodyLabel)
+
+        // Position at top-right of screen
+        if let screen = NSScreen.main {
+            let screenFrame = screen.visibleFrame
+            let panelOrigin = NSPoint(
+                x: screenFrame.maxX - 316,
+                y: screenFrame.maxY - 86
+            )
+            panel.setFrameOrigin(panelOrigin)
+        }
+
+        panel.orderFrontRegardless()
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.25
+            panel.animator().alphaValue = 1.0
+        }
+
+        // Auto-dismiss after 3 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            NSAnimationContext.runAnimationGroup({ ctx in
+                ctx.duration = 0.5
+                panel.animator().alphaValue = 0.0
+            }, completionHandler: {
+                panel.orderOut(nil)
+            })
+        }
     }
 }
 
