@@ -50,10 +50,10 @@ final class Mounter {
         // 1. Unmount current (read-only) mount if present. diskutil handles
         //    this without privileges for volumes the user mounted.
         if volume.isMounted {
-            let result = run("/usr/sbin/diskutil", ["unmount", volume.devicePath])
-            if result.status != 0 {
+            let result = Shell.run("/usr/sbin/diskutil", ["unmount", volume.devicePath])
+            if !result.succeeded {
                 // Fall back to a forced unmount inside the privileged script below.
-                _ = run("/usr/sbin/diskutil", ["unmount", "force", volume.devicePath])
+                Shell.run("/usr/sbin/diskutil", ["unmount", "force", volume.devicePath])
             }
         }
 
@@ -78,8 +78,8 @@ final class Mounter {
     /// Unmounts a volume (works for both Apple-driver and ntfs-3g mounts).
     func unmount(_ volume: NTFSVolume) throws {
         guard volume.isMounted else { return }
-        let result = run("/usr/sbin/diskutil", ["unmount", volume.devicePath])
-        if result.status != 0 {
+        let result = Shell.run("/usr/sbin/diskutil", ["unmount", volume.devicePath])
+        if !result.succeeded {
             // FUSE mounts made by root sometimes need privileged unmount.
             try runPrivileged("/usr/sbin/diskutil unmount force '\(volume.devicePath)'")
         }
@@ -96,9 +96,9 @@ final class Mounter {
             .replacingOccurrences(of: "\"", with: "\\\"")
 
         let appleScript = "do shell script \"\(escaped)\" with administrator privileges"
-        let result = run("/usr/bin/osascript", ["-e", appleScript])
+        let result = Shell.run("/usr/bin/osascript", ["-e", appleScript])
 
-        if result.status != 0 {
+        if !result.succeeded {
             let stderr = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
             if stderr.contains("-128") { // User canceled
                 throw MounterError.userCancelled
@@ -109,36 +109,6 @@ final class Mounter {
 
     // MARK: - Helpers
 
-    private struct CommandResult {
-        let status: Int32
-        let stdout: String
-        let stderr: String
-    }
-
-    @discardableResult
-    private func run(_ path: String, _ args: [String]) -> CommandResult {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: path)
-        process.arguments = args
-        let outPipe = Pipe()
-        let errPipe = Pipe()
-        process.standardOutput = outPipe
-        process.standardError = errPipe
-        do {
-            try process.run()
-            let out = outPipe.fileHandleForReading.readDataToEndOfFile()
-            let err = errPipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            return CommandResult(
-                status: process.terminationStatus,
-                stdout: String(data: out, encoding: .utf8) ?? "",
-                stderr: String(data: err, encoding: .utf8) ?? ""
-            )
-        } catch {
-            return CommandResult(status: -1, stdout: "", stderr: error.localizedDescription)
-        }
-    }
-
     /// Keeps volume names safe to embed in shell single quotes and mount options.
     private func sanitize(_ name: String) -> String {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: " ._-"))
@@ -146,3 +116,4 @@ final class Mounter {
         return cleaned.isEmpty ? "NTFS Volume" : cleaned
     }
 }
+

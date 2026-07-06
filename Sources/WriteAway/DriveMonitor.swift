@@ -19,7 +19,8 @@ final class DriveMonitor {
 
     /// Returns all NTFS partitions on external physical disks.
     func scan() -> [NTFSVolume] {
-        guard let listData = runDiskutil(["list", "-plist", "external", "physical"]),
+        guard let listData = Shell.runForData("/usr/sbin/diskutil",
+                                              ["list", "-plist", "external", "physical"]),
               let listPlist = try? PropertyListSerialization.propertyList(
                   from: listData, options: [], format: nil) as? [String: Any],
               let wholeDisks = listPlist["AllDisksAndPartitions"] as? [[String: Any]]
@@ -46,7 +47,7 @@ final class DriveMonitor {
 
     /// Fetches `diskutil info` for one partition and returns it if it's NTFS.
     private func info(for deviceID: String) -> NTFSVolume? {
-        guard let data = runDiskutil(["info", "-plist", deviceID]),
+        guard let data = Shell.runForData("/usr/sbin/diskutil", ["info", "-plist", deviceID]),
               let plist = try? PropertyListSerialization.propertyList(
                   from: data, options: [], format: nil) as? [String: Any]
         else { return nil }
@@ -83,8 +84,9 @@ final class DriveMonitor {
     /// or with fstypename macfuse. Checking `mount` covers volumes diskutil
     /// no longer reports as ntfs once FUSE owns them.
     private func isNTFS3GMount(deviceID: String, mountPoint: String?) -> Bool {
-        guard let output = runCommand("/sbin/mount", args: []) else { return false }
-        for line in output.split(separator: "\n") {
+        let result = Shell.run("/sbin/mount")
+        guard result.succeeded else { return false }
+        for line in result.stdout.split(separator: "\n") {
             if line.contains("/dev/\(deviceID) ") &&
                (line.contains("ntfs-3g") || line.contains("macfuse") || line.contains("osxfuse")) {
                 return true
@@ -94,40 +96,6 @@ final class DriveMonitor {
     }
 
     // MARK: - Helpers
-
-    private func runDiskutil(_ args: [String]) -> Data? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/sbin/diskutil")
-        process.arguments = args
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-        do {
-            try process.run()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            return process.terminationStatus == 0 ? data : nil
-        } catch {
-            return nil
-        }
-    }
-
-    private func runCommand(_ path: String, args: [String]) -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: path)
-        process.arguments = args
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-        do {
-            try process.run()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            return String(data: data, encoding: .utf8)
-        } catch {
-            return nil
-        }
-    }
 
     private func formatBytes(_ bytes: Int64) -> String {
         let formatter = ByteCountFormatter()
