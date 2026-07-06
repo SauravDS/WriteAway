@@ -1,17 +1,23 @@
-# WriteAway
+<div align="center">
+  <h1>WriteAway</h1>
+  <p><em>It's a pain for cross-OS users to work with NTFS based external drives on Mac, and here's the painkiller I built (of course, used Claude...)</em></p>
+  <p>
+    <img alt="Swift" src="https://img.shields.io/badge/Swift-5.9-F05138?style=flat-square&logo=swift&logoColor=white" />
+    <img alt="macOS" src="https://img.shields.io/badge/macOS-13.0+-000000?style=flat-square&logo=apple&logoColor=white" />
+    <img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/SauravDS/WriteAway?style=social" />
+  </p>
+</div>
 
-*It's a pain for cross-OS users to work with NTFS based external drives on Mac, and here's the painkiller I built (of course, used Claude...)* 💊
-
-A lightweight macOS menu bar utility that lets you **read and write NTFS external drives** on your MacBook natively and securely. It detects plugged-in NTFS volumes and remounts them read/write using the open-source **ntfs-3g** driver via **macFUSE** — bypassing macOS's native read-only limitations.
+A lightweight macOS menu bar utility that allows you to **read and write NTFS external drives** on your MacBook natively and securely. It detects plugged-in NTFS volumes and remounts them read/write using the open-source **ntfs-3g** driver via **macFUSE** — effectively bypassing macOS's native read-only limitations.
 
 ## Features
 
-- 🔄 **Auto-Detection** — Instantly detects when NTFS drives are plugged in using zero-overhead macOS notifications.
-- 🔓 **One-Click Read/Write** — Seamlessly remounts drives with full write permissions.
-- ⏏️ **Safe Eject** — Unmounts and safely spins down your external drives.
-- 🔔 **Toast Notifications** — Non-blocking, beautiful toast notifications for mount, unmount, and eject events.
-- 🛡️ **Secure Execution** — All shell commands use proper string escaping and Apple's native `NSAppleScript` bridge to prevent shell-injection vulnerabilities.
-- 📝 **Diagnostic Logging** — Uses native `os.Logger` so you can view mount logs directly in macOS Console.
+- **Auto-Detection** — Instantly detects when NTFS drives are plugged in using zero-overhead macOS notifications.
+- **One-Click Read/Write** — Seamlessly remounts drives with full write permissions.
+- **Safe Eject** — Unmounts and safely spins down your external drives to prevent data corruption.
+- **Toast Notifications** — Non-blocking toast notifications for mount, unmount, and eject events that do not interrupt your workflow.
+- **Secure Execution** — All shell commands use proper string escaping and Apple's native `NSAppleScript` bridge to prevent shell-injection vulnerabilities.
+- **Diagnostic Logging** — Uses native `os.Logger` so you can view mount logs and diagnose issues directly in the macOS Console.
 
 ## 1. Prerequisites (one-time setup)
 
@@ -54,7 +60,7 @@ This will create `WriteAway.app` in your project root.
 
 Double-click `WriteAway.app` to run it, or drag it to your `~/Applications/` folder.
 
-A drive icon appears in your menu bar. Plug in an NTFS drive, click the icon, and choose **Mount Read/Write**. You'll get the standard macOS admin-password prompt (ntfs-3g must run as root to mount into `/Volumes`).
+A drive icon appears in your menu bar. Plug in an NTFS drive, click the icon, and choose **Mount Read/Write**. You'll receive the standard macOS admin-password prompt (ntfs-3g must run as root to mount into `/Volumes`).
 
 - **externaldrive ✓** icon — everything writable or no drives attached
 - **externaldrive !** icon — an NTFS drive is currently mounted read-only
