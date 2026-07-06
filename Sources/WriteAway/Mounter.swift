@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 enum MounterError: LocalizedError {
@@ -42,8 +43,7 @@ final class Mounter {
 
     /// Unmounts the volume (from Apple's read-only driver if currently mounted)
     /// and remounts it read/write with ntfs-3g. Runs the privileged part through
-    /// an osascript administrator prompt, so the user sees the standard
-    /// macOS password dialog.
+    /// NSAppleScript so the user sees the standard macOS password dialog.
     func mountReadWrite(_ volume: NTFSVolume) throws {
         guard let ntfs3g = ntfs3gPath else { throw MounterError.ntfs3gNotFound }
 
@@ -57,20 +57,24 @@ final class Mounter {
             }
         }
 
-        // 2. Build the privileged mount script.
-        let mountPoint = "/Volumes/\(sanitize(volume.volumeName))"
+        // 2. Build the privileged mount command.
+        //    All user-controlled values go through shellEscape() to prevent injection.
+        let safeName = sanitize(volume.volumeName)
+        let mountPoint = "/Volumes/\(safeName)"
+        let escapedMountPoint = Shell.shellEscape(mountPoint)
+        let escapedNtfs3g = Shell.shellEscape(ntfs3g)
+        let escapedDevice = Shell.shellEscape(volume.devicePath)
+
         let options = [
             "local",                              // show as a local disk in Finder
             "allow_other",                        // usable by the logged-in user
             "auto_xattr",                         // extended attributes support
             "windows_names",                      // refuse names invalid on Windows
-            "volname=\(sanitize(volume.volumeName))"
+            "volname=\(safeName)"
         ].joined(separator: ",")
 
-        let script = """
-        /bin/mkdir -p '\(mountPoint)' && \
-        '\(ntfs3g)' '\(volume.devicePath)' '\(mountPoint)' -o \(options)
-        """
+        let script = "/bin/mkdir -p \(escapedMountPoint) && "
+            + "\(escapedNtfs3g) \(escapedDevice) \(escapedMountPoint) -o \(options)"
 
         try runPrivileged(script)
     }
@@ -81,36 +85,50 @@ final class Mounter {
         let result = Shell.run("/usr/sbin/diskutil", ["unmount", volume.devicePath])
         if !result.succeeded {
             // FUSE mounts made by root sometimes need privileged unmount.
-            try runPrivileged("/usr/sbin/diskutil unmount force '\(volume.devicePath)'")
+            let escapedDevice = Shell.shellEscape(volume.devicePath)
+            try runPrivileged("/usr/sbin/diskutil unmount force \(escapedDevice)")
         }
     }
 
     // MARK: - Privileged execution
 
-    /// Runs a shell command with administrator privileges via osascript.
-    /// This shows the standard macOS authentication dialog.
+    /// Runs a shell command with administrator privileges via NSAppleScript.
+    /// Uses the native AppleScript bridge instead of shelling out to osascript,
+    /// which avoids the fragile double-escaping (shell-inside-AppleScript-inside-shell).
     private func runPrivileged(_ shellCommand: String) throws {
-        // Escape for embedding inside an AppleScript double-quoted string.
-        let escaped = shellCommand
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
+        // NSAppleScript handles the AppleScript string escaping for us —
+        // we only need to escape for the inner shell context, which is
+        // already handled by Shell.shellEscape() at the call sites.
+        let source = "do shell script \(appleScriptString(shellCommand)) with administrator privileges"
 
-        let appleScript = "do shell script \"\(escaped)\" with administrator privileges"
-        let result = Shell.run("/usr/bin/osascript", ["-e", appleScript])
+        var errorInfo: NSDictionary?
+        let script = NSAppleScript(source: source)!
+        script.executeAndReturnError(&errorInfo)
 
-        if !result.succeeded {
-            let stderr = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-            if stderr.contains("-128") { // User canceled
+        if let errorInfo = errorInfo {
+            let errorNumber = errorInfo[NSAppleScript.errorNumber] as? Int ?? 0
+            if errorNumber == -128 {
                 throw MounterError.userCancelled
             }
-            throw MounterError.mountFailed(stderr.isEmpty ? "unknown error" : stderr)
+            let message = errorInfo[NSAppleScript.errorMessage] as? String ?? "unknown error"
+            throw MounterError.mountFailed(message)
         }
     }
 
     // MARK: - Helpers
 
-    /// Keeps volume names safe to embed in shell single quotes and mount options.
-    private func sanitize(_ name: String) -> String {
+    /// Formats a Swift string as an AppleScript string literal with proper escaping.
+    /// Handles backslashes and double quotes.
+    private func appleScriptString(_ value: String) -> String {
+        let escaped = value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        return "\"\(escaped)\""
+    }
+
+    /// Keeps volume names safe for mount points and FUSE options.
+    /// Only allows alphanumerics and a small set of safe punctuation.
+    func sanitize(_ name: String) -> String {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: " ._-"))
         let cleaned = String(name.unicodeScalars.filter { allowed.contains($0) })
         return cleaned.isEmpty ? "NTFS Volume" : cleaned
