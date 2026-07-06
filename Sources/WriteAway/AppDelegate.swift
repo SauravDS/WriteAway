@@ -79,7 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(empty)
         }
 
-        for (index, volume) in volumes.enumerated() {
+        for volume in volumes {
             let state: String
             if !volume.isMounted {
                 state = "not mounted"
@@ -100,7 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                            action: #selector(mountReadWrite(_:)),
                                            keyEquivalent: "")
                 mountItem.target = self
-                mountItem.tag = index
+                mountItem.representedObject = volume.deviceID
                 menu.addItem(mountItem)
             }
 
@@ -109,14 +109,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                           action: #selector(openInFinder(_:)),
                                           keyEquivalent: "")
                 openItem.target = self
-                openItem.tag = index
+                openItem.representedObject = volume.deviceID
                 menu.addItem(openItem)
 
                 let unmountItem = NSMenuItem(title: "   Unmount",
                                              action: #selector(unmountVolume(_:)),
                                              keyEquivalent: "")
                 unmountItem.target = self
-                unmountItem.tag = index
+                unmountItem.representedObject = volume.deviceID
                 menu.addItem(unmountItem)
             }
 
@@ -188,8 +188,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func volume(for sender: NSMenuItem) -> NTFSVolume? {
-        guard sender.tag >= 0, sender.tag < volumes.count else { return nil }
-        return volumes[sender.tag]
+        guard let deviceID = sender.representedObject as? String else { return nil }
+        return volumes.first { $0.deviceID == deviceID }
     }
 
     // MARK: - Feedback
